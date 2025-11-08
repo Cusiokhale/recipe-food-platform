@@ -49,7 +49,7 @@ For detailed endpoint documentation, see [API.md](API.md).
 - `PUT /api/reviews/:id` - Update review (author only)
 - `DELETE /api/reviews/:id` - Delete review (author only)
 
-## 🔐 Authentication
+## Authentication
 
 This API uses **Firebase Authentication** with JWT tokens.
 
@@ -79,4 +79,4 @@ curl -X POST \
 
 The response includes an `idToken` field - use this as your Bearer token.
 
-Made with ❤️ by the Food Recipe API team (Cordilia)
+Made with love by the Food Recipe API team (Cordilia)
