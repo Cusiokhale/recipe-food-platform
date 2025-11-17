@@ -7,3 +7,5 @@ coverage
 firebase-adminsdk.json
 
 service-account-key.json
+
+/uploads

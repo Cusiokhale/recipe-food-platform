@@ -9,6 +9,7 @@ import ingredientsRouter from './routes/ingredients';
 import categoriesRouter from './routes/categories';
 import reviewsRouter from './routes/reviews';
 import healthRouter from './routes/health';
+import uploadRouter from './routes/upload';
 import { accessLogger, consoleLogger, errorLogger } from './middleware/logger';
 
 dotenv.config();
@@ -38,9 +39,7 @@ app.use('/api/recipes', recipesRouter);
 app.use('/api/recipes', ingredientsRouter);
 app.use('/api/categories', categoriesRouter);
 app.use('/api/recipes', reviewsRouter);
-app.use('/api', ingredientsRouter);
-app.use('/api', reviewsRouter);
-app.use('/api', categoriesRouter);
+app.use('/api/', uploadRouter);
 
 app.use(errorLogger);
 app.use(errorHandler);
