@@ -4,13 +4,12 @@ import {
   CreateIngredientDto,
   UpdateIngredientDto,
   PaginatedResponse,
+  IngredientQueryOptions,
 } from '../types';
+import ingredientRepository from '../repositories/ingredientRepository';
 import recipeService from './recipeService';
 
 class IngredientService {
-  private ingredients: Map<string, Ingredient> = new Map();
-  private idCounter = 1;
-
   async createIngredient(
     recipeId: string,
     data: CreateIngredientDto
@@ -18,78 +17,44 @@ class IngredientService {
     // Verify recipe exists
     await recipeService.getRecipeById(recipeId);
 
-    const id = `ingredient_${this.idCounter++}`;
-
-    const ingredient: Ingredient = {
-      id,
-      name: data.name,
-      unit: data.unit,
-      quantity: data.quantity,
-      recipeId,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    this.ingredients.set(id, ingredient);
+    const ingredient = await ingredientRepository.createIngredient(recipeId, data);
 
     // Link ingredient to recipe
-    await recipeService.addIngredientToRecipe(recipeId, id);
+    await recipeService.addIngredientToRecipe(recipeId, ingredient.id);
 
     return ingredient;
   }
 
   async getIngredientById(id: string): Promise<Ingredient> {
-    const ingredient = this.ingredients.get(id);
+    const ingredient = await ingredientRepository.findById(id);
     if (!ingredient) {
-      throw new AppError('Ingredient not found', "ERROR-1", 404);
+      throw new AppError('Ingredient not found', 'INGREDIENT_NOT_FOUND', 404);
     }
     return ingredient;
   }
 
   async getIngredientsByRecipeId(
     recipeId: string,
-    page: number = 1,
-    limit: number = 50
+    options: IngredientQueryOptions = {}
   ): Promise<PaginatedResponse<Ingredient>> {
     // Verify recipe exists
     await recipeService.getRecipeById(recipeId);
 
-    let ingredients = Array.from(this.ingredients.values()).filter(
-      (i) => i.recipeId === recipeId
-    );
-
-    // Sort by name
-    ingredients.sort((a, b) => a.name.localeCompare(b.name));
-
-    // Pagination
-    const total = ingredients.length;
-    const totalPages = Math.ceil(total / limit);
-    const start = (page - 1) * limit;
-    const end = start + limit;
-    const data = ingredients.slice(start, end);
-
-    return {
-      data,
-      total,
-      page,
-      limit,
-      totalPages,
-    };
+    return ingredientRepository.findByRecipeId(recipeId, options);
   }
 
   async updateIngredient(
     id: string,
     data: UpdateIngredientDto
   ): Promise<Ingredient> {
-    const ingredient = await this.getIngredientById(id);
+    // Verify ingredient exists
+    await this.getIngredientById(id);
 
-    const updatedIngredient: Ingredient = {
-      ...ingredient,
-      ...data,
-      updatedAt: new Date(),
-    };
+    const updatedIngredient = await ingredientRepository.updateIngredient(id, data);
+    if (!updatedIngredient) {
+      throw new AppError('Failed to update ingredient', 'UPDATE_FAILED', 500);
+    }
 
-    this.ingredients.set(id, updatedIngredient);
     return updatedIngredient;
   }
 
@@ -99,23 +64,32 @@ class IngredientService {
     // Remove ingredient from recipe
     await recipeService.removeIngredientFromRecipe(ingredient.recipeId, id);
 
-    this.ingredients.delete(id);
+    const deleted = await ingredientRepository.delete(id);
+    if (!deleted) {
+      throw new AppError('Failed to delete ingredient', 'DELETE_FAILED', 500);
+    }
   }
 
   async bulkCreateIngredients(
     recipeId: string,
     ingredientsData: CreateIngredientDto[]
   ): Promise<Ingredient[]> {
-    const ingredients = await Promise.all(
-      ingredientsData.map((data) => this.createIngredient(recipeId, data))
-    );
+    // Verify recipe exists
+    await recipeService.getRecipeById(recipeId);
+
+    const ingredients: Ingredient[] = [];
+
+    for (const data of ingredientsData) {
+      const ingredient = await this.createIngredient(recipeId, data);
+      ingredients.push(ingredient);
+    }
+
     return ingredients;
   }
 
   // Admin/testing methods
-  clearAll(): void {
-    this.ingredients.clear();
-    this.idCounter = 1;
+  async clearAll(): Promise<void> {
+    await ingredientRepository.clearAll();
   }
 }
 
