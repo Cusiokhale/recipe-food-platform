@@ -159,6 +159,7 @@ router.post(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const data: CreateRecipeDto = req.body;
+      
       const userId = req.user!.uid;
 
       const recipe = await recipeService.createRecipe(userId, data);
