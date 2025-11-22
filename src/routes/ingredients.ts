@@ -1,7 +1,12 @@
 import { Router, Response, NextFunction } from 'express';
-import authenticate, { AuthenticatedRequest }  from '../middleware/authenticate';
+import authenticate, { AuthenticatedRequest } from '../middleware/authenticate';
 import ingredientService from '../services/ingredientService';
-import { CreateIngredientDto, UpdateIngredientDto } from '../types';
+import {
+  validateCreateIngredient,
+  validateUpdateIngredient,
+  validateIngredientSort,
+} from '../utils/validation';
+import { IngredientFilterOptions } from '../types';
 
 const router = Router();
 
@@ -20,21 +25,30 @@ const router = Router();
  *           type: string
  *         name:
  *           type: string
+ *           maxLength: 100
  *         unit:
  *           type: string
+ *           maxLength: 50
  *           example: cups
  *         quantity:
  *           type: number
+ *           minimum: 0
  *           example: 2
  *         recipeId:
  *           type: string
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         updatedAt:
+ *           type: string
+ *           format: date-time
  */
 
 /**
  * @swagger
  * /api/recipes/{recipeId}/ingredients:
  *   get:
- *     summary: Get all ingredients for a recipe
+ *     summary: Get all ingredients for a recipe with pagination, filtering, and sorting
  *     tags: [Ingredients]
  *     security:
  *       - bearerAuth: []
@@ -49,14 +63,52 @@ const router = Router();
  *         schema:
  *           type: integer
  *           default: 1
+ *         description: Page number for pagination
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
  *           default: 50
+ *         description: Number of items per page
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search in ingredient name
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           enum: [name, quantity, createdAt]
+ *           default: name
+ *         description: Field to sort by
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: asc
+ *         description: Sort order
  *     responses:
  *       200:
  *         description: List of ingredients
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Ingredient'
+ *                 total:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *                 totalPages:
+ *                   type: integer
  *       404:
  *         description: Recipe not found
  */
@@ -68,10 +120,20 @@ router.get(
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 50;
 
+      // Build filters
+      const filters: IngredientFilterOptions = {
+        search: req.query.search as string,
+      };
+
+      // Build sort options
+      const sort = validateIngredientSort(
+        req.query.sortBy as string,
+        req.query.sortOrder as string
+      );
+
       const result = await ingredientService.getIngredientsByRecipeId(
         req.params.recipeId,
-        page,
-        limit
+        { page, limit, filters, sort }
       );
 
       res.json(result);
@@ -100,10 +162,26 @@ router.get(
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/Ingredient'
+ *             type: object
+ *             required:
+ *               - name
+ *               - unit
+ *               - quantity
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 maxLength: 100
+ *               unit:
+ *                 type: string
+ *                 maxLength: 50
+ *               quantity:
+ *                 type: number
+ *                 minimum: 0
  *     responses:
  *       201:
  *         description: Ingredient created successfully
+ *       400:
+ *         description: Validation error
  *       404:
  *         description: Recipe not found
  */
@@ -112,7 +190,7 @@ router.post(
   authenticate,
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const data: CreateIngredientDto = req.body;
+      const data = validateCreateIngredient(req.body);
       const ingredient = await ingredientService.createIngredient(req.params.recipeId, data);
 
       res.status(201).json(ingredient);
@@ -139,6 +217,10 @@ router.post(
  *     responses:
  *       200:
  *         description: Ingredient details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Ingredient'
  *       404:
  *         description: Ingredient not found
  */
@@ -174,10 +256,22 @@ router.get(
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/Ingredient'
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 maxLength: 100
+ *               unit:
+ *                 type: string
+ *                 maxLength: 50
+ *               quantity:
+ *                 type: number
+ *                 minimum: 0
  *     responses:
  *       200:
  *         description: Ingredient updated successfully
+ *       400:
+ *         description: Validation error
  *       404:
  *         description: Ingredient not found
  */
@@ -186,7 +280,7 @@ router.put(
   authenticate,
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const data: UpdateIngredientDto = req.body;
+      const data = validateUpdateIngredient(req.body);
       const ingredient = await ingredientService.updateIngredient(req.params.id, data);
 
       res.json(ingredient);
