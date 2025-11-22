@@ -52,6 +52,7 @@ const authenticate = async (
         const decodedToken: DecodedIdToken = await auth.verifyIdToken(
             token
         );
+        console.log('Authentication Result => ', decodedToken)
         res.locals.uid = decodedToken.uid;
         res.locals.role = decodedToken.role;
         next();

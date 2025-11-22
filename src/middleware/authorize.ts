@@ -5,6 +5,17 @@ import { Request, Response, NextFunction } from "express";
 import { AuthorizationOptions } from "../models/authorizationOptions";
 import { AuthorizationError } from "../errors/errors";
 
+declare global {
+    namespace Express {
+        interface Request {
+            user?: {
+                role: string;
+                uid: string;
+            };
+        }
+    }
+}
+
 /**
  * Middleware to check if a user is authorized based on their role or UID.
  * Now integrated with centralized error handling system.
@@ -36,6 +47,8 @@ const isAuthorized = (opts: AuthorizationOptions) => {
                 );
             }
 
+            req.user = { role, uid }
+
             // Check if the user's role matches one of the allowed roles
             if (opts.hasRole.includes(role)) {
                 return next();
@@ -46,6 +59,7 @@ const isAuthorized = (opts: AuthorizationOptions) => {
                 "Forbidden: Insufficient role",
                 "INSUFFICIENT_ROLE"
             );
+
         } catch (error) {
             // Pass errors to the centralized error handler
             next(error);
