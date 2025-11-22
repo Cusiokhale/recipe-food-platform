@@ -131,3 +131,96 @@ export interface PaginatedResponse<T> {
   limit: number;
   totalPages: number;
 }
+
+// Sorting options
+export type SortOrder = 'asc' | 'desc';
+
+export interface SortOptions {
+  field: string;
+  order: SortOrder;
+}
+
+// Recipe filter options
+export interface RecipeFilterOptions {
+  categoryId?: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  createdBy?: string;
+  search?: string; // Search in title and description
+  minPrepTime?: number;
+  maxPrepTime?: number;
+  minCookTime?: number;
+  maxCookTime?: number;
+  minServings?: number;
+  maxServings?: number;
+  createdAfter?: Date;
+  createdBefore?: Date;
+}
+
+// Recipe sort fields
+export type RecipeSortField = 'createdAt' | 'updatedAt' | 'title' | 'prepTime' | 'cookTime' | 'servings' | 'difficulty';
+
+// Category filter options
+export interface CategoryFilterOptions {
+  search?: string; // Search in name and description
+}
+
+// Category sort fields
+export type CategorySortField = 'name' | 'createdAt' | 'updatedAt';
+
+// Ingredient filter options
+export interface IngredientFilterOptions {
+  search?: string; // Search in name
+}
+
+// Ingredient sort fields
+export type IngredientSortField = 'name' | 'quantity' | 'createdAt';
+
+// Review filter options
+export interface ReviewFilterOptions {
+  minRating?: number;
+  maxRating?: number;
+}
+
+// Review sort fields
+export type ReviewSortField = 'createdAt' | 'rating';
+
+// Query options combining pagination, filtering, and sorting
+export interface RecipeQueryOptions {
+  page?: number;
+  limit?: number;
+  filters?: RecipeFilterOptions;
+  sort?: {
+    field: RecipeSortField;
+    order: SortOrder;
+  };
+}
+
+export interface CategoryQueryOptions {
+  page?: number;
+  limit?: number;
+  filters?: CategoryFilterOptions;
+  sort?: {
+    field: CategorySortField;
+    order: SortOrder;
+  };
+}
+
+export interface IngredientQueryOptions {
+  page?: number;
+  limit?: number;
+  filters?: IngredientFilterOptions;
+  sort?: {
+    field: IngredientSortField;
+    order: SortOrder;
+  };
+}
+
+export interface ReviewQueryOptions {
+  page?: number;
+  limit?: number;
+  filters?: ReviewFilterOptions;
+  sort?: {
+    field: ReviewSortField;
+    order: SortOrder;
+  };
+}

@@ -1,8 +1,14 @@
 import { Router, Response, NextFunction } from 'express';
 import authenticate, { AuthenticatedRequest } from '../middleware/authenticate';
 import reviewService from '../services/reviewService';
-import { CreateReviewDto, UpdateReviewDto } from '../types';
 import isAuthorized from '../middleware/authorize';
+import {
+  validateCreateReview,
+  validateUpdateReview,
+  validateReviewSort,
+  parseIntOrUndefined,
+} from '../utils/validation';
+import { ReviewFilterOptions } from '../types';
 
 const router = Router();
 
@@ -30,7 +36,11 @@ const router = Router();
  *           description: Rating from 1 to 5
  *         comment:
  *           type: string
+ *           maxLength: 1000
  *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         updatedAt:
  *           type: string
  *           format: date-time
  */
@@ -39,7 +49,7 @@ const router = Router();
  * @swagger
  * /api/recipes/{recipeId}/reviews:
  *   get:
- *     summary: Get all reviews for a recipe
+ *     summary: Get all reviews for a recipe with pagination, filtering, and sorting
  *     tags: [Reviews]
  *     security:
  *       - bearerAuth: []
@@ -54,14 +64,61 @@ const router = Router();
  *         schema:
  *           type: integer
  *           default: 1
+ *         description: Page number for pagination
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
  *           default: 20
+ *         description: Number of items per page
+ *       - in: query
+ *         name: minRating
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 5
+ *         description: Minimum rating filter
+ *       - in: query
+ *         name: maxRating
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 5
+ *         description: Maximum rating filter
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           enum: [createdAt, rating]
+ *           default: createdAt
+ *         description: Field to sort by
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: desc
+ *         description: Sort order
  *     responses:
  *       200:
  *         description: List of reviews
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Review'
+ *                 total:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *                 totalPages:
+ *                   type: integer
  *       404:
  *         description: Recipe not found
  */
@@ -73,10 +130,21 @@ router.get(
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
 
+      // Build filters
+      const filters: ReviewFilterOptions = {
+        minRating: parseIntOrUndefined(req.query.minRating),
+        maxRating: parseIntOrUndefined(req.query.maxRating),
+      };
+
+      // Build sort options
+      const sort = validateReviewSort(
+        req.query.sortBy as string,
+        req.query.sortOrder as string
+      );
+
       const result = await reviewService.getReviewsByRecipeId(
         req.params.recipeId,
-        page,
-        limit
+        { page, limit, filters, sort }
       );
 
       res.json(result);
@@ -90,7 +158,7 @@ router.get(
  * @swagger
  * /api/recipes/{recipeId}/reviews:
  *   post:
- *     summary: Create a review for a recipe
+ *     summary: Create a review for a recipe (one per user per recipe)
  *     tags: [Reviews]
  *     security:
  *       - bearerAuth: []
@@ -115,21 +183,22 @@ router.get(
  *                 maximum: 5
  *               comment:
  *                 type: string
+ *                 maxLength: 1000
  *     responses:
  *       201:
  *         description: Review created successfully
  *       400:
- *         description: Invalid rating or user already reviewed
+ *         description: Invalid rating or user already reviewed this recipe
  *       404:
  *         description: Recipe not found
  */
 router.post(
   '/:recipeId/reviews',
   authenticate,
-  isAuthorized({hasRole: ["user"]}),
+  isAuthorized({ hasRole: ['user'] }),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const data: CreateReviewDto = req.body;
+      const data = validateCreateReview(req.body);
       const userId = req.user!.uid;
       const userName = req.user!.email;
 
@@ -206,6 +275,10 @@ router.get(
  *     responses:
  *       200:
  *         description: Review details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Review'
  *       404:
  *         description: Review not found
  */
@@ -226,7 +299,7 @@ router.get(
  * @swagger
  * /api/reviews/{id}:
  *   put:
- *     summary: Update a review
+ *     summary: Update a review (author only)
  *     tags: [Reviews]
  *     security:
  *       - bearerAuth: []
@@ -249,6 +322,7 @@ router.get(
  *                 maximum: 5
  *               comment:
  *                 type: string
+ *                 maxLength: 1000
  *     responses:
  *       200:
  *         description: Review updated successfully
@@ -262,10 +336,10 @@ router.get(
 router.put(
   '/reviews/:id',
   authenticate,
-  isAuthorized({hasRole: ["user"]}),
+  isAuthorized({ hasRole: ['user'] }),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      const data: UpdateReviewDto = req.body;
+      const data = validateUpdateReview(req.body);
       const userId = req.user!.uid;
 
       const review = await reviewService.updateReview(req.params.id, userId, data);
@@ -280,7 +354,7 @@ router.put(
  * @swagger
  * /api/reviews/{id}:
  *   delete:
- *     summary: Delete a review
+ *     summary: Delete a review (author or admin only)
  *     tags: [Reviews]
  *     security:
  *       - bearerAuth: []
@@ -301,7 +375,7 @@ router.put(
 router.delete(
   '/reviews/:id',
   authenticate,
-  isAuthorized({hasRole: ["user", "admin"]}),
+  isAuthorized({ hasRole: ['user', 'admin'] }),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const userId = req.user!.uid;
@@ -317,7 +391,7 @@ router.delete(
  * @swagger
  * /api/users/me/reviews:
  *   get:
- *     summary: Get all reviews by the current user
+ *     summary: Get all reviews by the current user with pagination, filtering, and sorting
  *     tags: [Reviews]
  *     security:
  *       - bearerAuth: []
@@ -327,14 +401,61 @@ router.delete(
  *         schema:
  *           type: integer
  *           default: 1
+ *         description: Page number for pagination
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
  *           default: 20
+ *         description: Number of items per page
+ *       - in: query
+ *         name: minRating
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 5
+ *         description: Minimum rating filter
+ *       - in: query
+ *         name: maxRating
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 5
+ *         description: Maximum rating filter
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           enum: [createdAt, rating]
+ *           default: createdAt
+ *         description: Field to sort by
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: desc
+ *         description: Sort order
  *     responses:
  *       200:
  *         description: List of user's reviews
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Review'
+ *                 total:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *                 totalPages:
+ *                   type: integer
  */
 router.get(
   '/users/me/reviews',
@@ -345,7 +466,25 @@ router.get(
       const limit = parseInt(req.query.limit as string) || 20;
       const userId = req.user!.uid;
 
-      const result = await reviewService.getReviewsByUserId(userId, page, limit);
+      // Build filters
+      const filters: ReviewFilterOptions = {
+        minRating: parseIntOrUndefined(req.query.minRating),
+        maxRating: parseIntOrUndefined(req.query.maxRating),
+      };
+
+      // Build sort options
+      const sort = validateReviewSort(
+        req.query.sortBy as string,
+        req.query.sortOrder as string
+      );
+
+      const result = await reviewService.getReviewsByUserId(userId, {
+        page,
+        limit,
+        filters,
+        sort,
+      });
+
       res.json(result);
     } catch (error) {
       next(error);

@@ -4,102 +4,68 @@ import {
   CreateCategoryDto,
   UpdateCategoryDto,
   PaginatedResponse,
+  CategoryQueryOptions,
 } from '../types';
+import categoryRepository from '../repositories/categoryRepository';
 
 class CategoryService {
-  private categories: Map<string, Category> = new Map();
-  private idCounter = 1;
-
   async createCategory(data: CreateCategoryDto): Promise<Category> {
-    // Check for duplicate name
-    const existingCategory = Array.from(this.categories.values()).find(
-      (c) => c.name.toLowerCase() === data.name.toLowerCase()
-    );
+    // Check for duplicate name (case-insensitive)
+    const existingCategory = await categoryRepository.findByNameCaseInsensitive(data.name);
 
     if (existingCategory) {
-      throw new AppError('Category with this name already exists', "ERROR-1", 400);
+      throw new AppError('Category with this name already exists', 'DUPLICATE_CATEGORY', 400);
     }
 
-    const id = `category_${this.idCounter++}`;
-
-    const category: Category = {
-      id,
-      name: data.name,
-      description: data.description,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    this.categories.set(id, category);
-    return category;
+    return categoryRepository.createCategory(data);
   }
 
   async getCategoryById(id: string): Promise<Category> {
-    const category = this.categories.get(id);
+    const category = await categoryRepository.findById(id);
     if (!category) {
-      throw new AppError('Category not found', "ERROR-1", 404);
+      throw new AppError('Category not found', 'CATEGORY_NOT_FOUND', 404);
     }
     return category;
   }
 
-  async getAllCategories(
-    page: number = 1,
-    limit: number = 50
-  ): Promise<PaginatedResponse<Category>> {
-    let categories = Array.from(this.categories.values());
-
-    // Sort by name
-    categories.sort((a, b) => a.name.localeCompare(b.name));
-
-    // Pagination
-    const total = categories.length;
-    const totalPages = Math.ceil(total / limit);
-    const start = (page - 1) * limit;
-    const end = start + limit;
-    const data = categories.slice(start, end);
-
-    return {
-      data,
-      total,
-      page,
-      limit,
-      totalPages,
-    };
+  async getAllCategories(options: CategoryQueryOptions = {}): Promise<PaginatedResponse<Category>> {
+    return categoryRepository.findAll(options);
   }
 
   async updateCategory(id: string, data: UpdateCategoryDto): Promise<Category> {
-    const category = await this.getCategoryById(id);
+    // Verify category exists
+    await this.getCategoryById(id);
 
     // Check for duplicate name if name is being updated
     if (data.name) {
-      const existingCategory = Array.from(this.categories.values()).find(
-        (c) => c.id !== id && c.name.toLowerCase() === data.name!.toLowerCase()
-      );
+      const isDuplicate = await categoryRepository.existsByNameExcludingId(data.name, id);
 
-      if (existingCategory) {
-        throw new AppError('Category with this name already exists', "ERROR-1", 400);
+      if (isDuplicate) {
+        throw new AppError('Category with this name already exists', 'DUPLICATE_CATEGORY', 400);
       }
     }
 
-    const updatedCategory: Category = {
-      ...category,
-      ...data,
-      updatedAt: new Date(),
-    };
+    const updatedCategory = await categoryRepository.updateCategory(id, data);
+    if (!updatedCategory) {
+      throw new AppError('Failed to update category', 'UPDATE_FAILED', 500);
+    }
 
-    this.categories.set(id, updatedCategory);
     return updatedCategory;
   }
 
   async deleteCategory(id: string): Promise<void> {
-    const category = await this.getCategoryById(id);
-    this.categories.delete(id);
+    // Verify category exists
+    await this.getCategoryById(id);
+
+    const deleted = await categoryRepository.delete(id);
+    if (!deleted) {
+      throw new AppError('Failed to delete category', 'DELETE_FAILED', 500);
+    }
   }
 
   // Admin/testing methods
-  clearAll(): void {
-    this.categories.clear();
-    this.idCounter = 1;
+  async clearAll(): Promise<void> {
+    await categoryRepository.clearAll();
   }
 }
 

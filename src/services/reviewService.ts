@@ -1,11 +1,15 @@
 import { AppError } from '../errors/errors';
-import { Review, CreateReviewDto, UpdateReviewDto, PaginatedResponse } from '../types';
+import {
+  Review,
+  CreateReviewDto,
+  UpdateReviewDto,
+  PaginatedResponse,
+  ReviewQueryOptions,
+} from '../types';
+import reviewRepository from '../repositories/reviewRepository';
 import recipeService from './recipeService';
 
 class ReviewService {
-  private reviews: Map<string, Review> = new Map();
-  private idCounter = 1;
-
   async createReview(
     recipeId: string,
     userId: string,
@@ -15,98 +19,39 @@ class ReviewService {
     // Verify recipe exists
     await recipeService.getRecipeById(recipeId);
 
-    // Validate rating
-    this.validateRating(data.rating);
-
     // Check if user already reviewed this recipe
-    const existingReview = Array.from(this.reviews.values()).find(
-      (r) => r.recipeId === recipeId && r.userId === userId
-    );
+    const existingReview = await reviewRepository.findByRecipeAndUser(recipeId, userId);
 
     if (existingReview) {
-      throw new AppError('You have already reviewed this recipe', "ERROR-1", 400);
+      throw new AppError('You have already reviewed this recipe', 'DUPLICATE_REVIEW', 400);
     }
 
-    const id = `review_${this.idCounter++}`;
-
-    const review: Review = {
-      id,
-      recipeId,
-      userId,
-      userName,
-      rating: data.rating,
-      comment: data.comment,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    this.reviews.set(id, review);
-    return review;
+    return reviewRepository.createReview(recipeId, userId, userName, data);
   }
 
   async getReviewById(id: string): Promise<Review> {
-    const review = this.reviews.get(id);
+    const review = await reviewRepository.findById(id);
     if (!review) {
-      throw new AppError('Review not found', "ERROR-1", 404);
+      throw new AppError('Review not found', 'REVIEW_NOT_FOUND', 404);
     }
     return review;
   }
 
   async getReviewsByRecipeId(
     recipeId: string,
-    page: number = 1,
-    limit: number = 20
+    options: ReviewQueryOptions = {}
   ): Promise<PaginatedResponse<Review>> {
     // Verify recipe exists
     await recipeService.getRecipeById(recipeId);
 
-    let reviews = Array.from(this.reviews.values()).filter(
-      (r) => r.recipeId === recipeId
-    );
-
-    // Sort by creation date (newest first)
-    reviews.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
-    // Pagination
-    const total = reviews.length;
-    const totalPages = Math.ceil(total / limit);
-    const start = (page - 1) * limit;
-    const end = start + limit;
-    const data = reviews.slice(start, end);
-
-    return {
-      data,
-      total,
-      page,
-      limit,
-      totalPages,
-    };
+    return reviewRepository.findByRecipeId(recipeId, options);
   }
 
   async getReviewsByUserId(
     userId: string,
-    page: number = 1,
-    limit: number = 20
+    options: ReviewQueryOptions = {}
   ): Promise<PaginatedResponse<Review>> {
-    let reviews = Array.from(this.reviews.values()).filter((r) => r.userId === userId);
-
-    // Sort by creation date (newest first)
-    reviews.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
-    // Pagination
-    const total = reviews.length;
-    const totalPages = Math.ceil(total / limit);
-    const start = (page - 1) * limit;
-    const end = start + limit;
-    const data = reviews.slice(start, end);
-
-    return {
-      data,
-      total,
-      page,
-      limit,
-      totalPages,
-    };
+    return reviewRepository.findByUserId(userId, options);
   }
 
   async updateReview(id: string, userId: string, data: UpdateReviewDto): Promise<Review> {
@@ -114,21 +59,14 @@ class ReviewService {
 
     // Check if user is the author
     if (review.userId !== userId) {
-      throw new AppError('Unauthorized to update this review', "ERROR-1", 403);
+      throw new AppError('Unauthorized to update this review', 'UNAUTHORIZED', 403);
     }
 
-    // Validate rating if provided
-    if (data.rating !== undefined) {
-      this.validateRating(data.rating);
+    const updatedReview = await reviewRepository.updateReview(id, data);
+    if (!updatedReview) {
+      throw new AppError('Failed to update review', 'UPDATE_FAILED', 500);
     }
 
-    const updatedReview: Review = {
-      ...review,
-      ...data,
-      updatedAt: new Date(),
-    };
-
-    this.reviews.set(id, updatedReview);
     return updatedReview;
   }
 
@@ -137,44 +75,22 @@ class ReviewService {
 
     // Check if user is the author
     if (review.userId !== userId) {
-      throw new AppError('Unauthorized to delete this review', "ERROR-1", 403);
+      throw new AppError('Unauthorized to delete this review', 'UNAUTHORIZED', 403);
     }
 
-    this.reviews.delete(id);
+    const deleted = await reviewRepository.delete(id);
+    if (!deleted) {
+      throw new AppError('Failed to delete review', 'DELETE_FAILED', 500);
+    }
   }
 
   async getAverageRating(recipeId: string): Promise<{ average: number; count: number }> {
-    const reviews = Array.from(this.reviews.values()).filter(
-      (r) => r.recipeId === recipeId
-    );
-
-    if (reviews.length === 0) {
-      return { average: 0, count: 0 };
-    }
-
-    const sum = reviews.reduce((acc, review) => acc + review.rating, 0);
-    const average = sum / reviews.length;
-
-    return {
-      average: Math.round(average * 10) / 10, // Round to 1 decimal place
-      count: reviews.length,
-    };
-  }
-
-  private validateRating(rating: number): void {
-    if (rating < 1 || rating > 5) {
-      throw new AppError('Rating must be between 1 and 5', "ERROR-1", 400);
-    }
-
-    if (!Number.isInteger(rating)) {
-      throw new AppError('Rating must be a whole number', "ERROR-1", 400);
-    }
+    return reviewRepository.getAverageRating(recipeId);
   }
 
   // Admin/testing methods
-  clearAll(): void {
-    this.reviews.clear();
-    this.idCounter = 1;
+  async clearAll(): Promise<void> {
+    await reviewRepository.clearAll();
   }
 }
 
