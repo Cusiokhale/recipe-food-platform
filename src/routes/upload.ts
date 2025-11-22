@@ -16,17 +16,14 @@ router.post(
         throw new AppError('No file uploaded', 'ERROR-1', 400);
       }
 
-      console.log('Res ', req.file)
+      // const result = await cloudinary.uploader.upload(
+      //       req.file.originalname
+      // );
 
-      const result = await cloudinary.uploader.upload(
-            req.file.originalname
-      );
-
-      console.log('Result => ', result)
+      // console.log('Result => ', result)
 
       return res.json({
-        imageUrl: (result as any).secure_url,
-        publicId: (result as any).public_id,
+        result:   `Image [${req.file.originalname}] uploaded locally!`
       });
     } catch (error) {
       next(error);
