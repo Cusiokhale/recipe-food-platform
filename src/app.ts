@@ -10,6 +10,7 @@ import categoriesRouter from './routes/categories';
 import reviewsRouter from './routes/reviews';
 import healthRouter from './routes/health';
 import uploadRouter from './routes/upload';
+import adminRouter from './routes/admin';
 import { accessLogger, consoleLogger, errorLogger } from './middleware/logger';
 
 dotenv.config();
@@ -20,8 +21,7 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 
-
-if (process.env.NODE_ENV !== "production") {
+if (process.env.NODE_ENV !== 'production') {
   app.use(consoleLogger);
 }
 
@@ -36,9 +36,8 @@ app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // Routes
 app.use('/api/health', healthRouter);
 app.use('/api/recipes', recipesRouter);
-app.use('/api/recipes', ingredientsRouter);
 app.use('/api/categories', categoriesRouter);
-app.use('/api/recipes', reviewsRouter);
+app.use('/api/admin', adminRouter);
 app.use('/api/', uploadRouter);
 
 app.use(errorLogger);
