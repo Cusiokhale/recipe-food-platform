@@ -1,4 +1,4 @@
-import multer, { Multer } from 'multer';
+import multer from 'multer';
 import path from 'path';
 import { Request } from 'express';
 import { AppError } from '../errors/errors';
