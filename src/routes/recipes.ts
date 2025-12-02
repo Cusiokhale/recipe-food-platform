@@ -447,7 +447,7 @@ router.put(
 router.delete(
   '/:id',
   authenticate,
-  isAuthorized({ hasRole: ['user'] }),
+  isAuthorized({ hasRole: ['user', 'admin'] }),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const userId = req.user!.uid;
