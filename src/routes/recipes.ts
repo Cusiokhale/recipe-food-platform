@@ -159,7 +159,7 @@ router.post(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const data: CreateRecipeDto = req.body;
-      
+
       const userId = req.user!.uid;
 
       const recipe = await recipeService.createRecipe(userId, data);
@@ -207,7 +207,7 @@ router.post(
 router.put(
   '/:id',
   authenticate,
-  isAuthorized({hasRole: ["user"]}),
+  isAuthorized({ hasRole: ['user'] }),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const data: UpdateRecipeDto = req.body;
@@ -246,7 +246,7 @@ router.put(
 router.delete(
   '/:id',
   authenticate,
-  isAuthorized({hasRole: ["user"]}),
+  isAuthorized({ hasRole: ['user', 'admin'] }),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const userId = req.user!.uid;
