@@ -209,10 +209,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     };
 
     // Build sort options
-    const sort = validateRecipeSort(
-      req.query.sortBy as string,
-      req.query.sortOrder as string
-    );
+    const sort = validateRecipeSort(req.query.sortBy as string, req.query.sortOrder as string);
 
     const result = await recipeService.getAllRecipes({
       page,
@@ -408,7 +405,7 @@ router.post(
 router.put(
   '/:id',
   authenticate,
-  isAuthorized({ hasRole: ['user'] }),
+  isAuthorized({ hasRole: ['user', 'admin'] }),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const data = validateUpdateRecipe(req.body);
